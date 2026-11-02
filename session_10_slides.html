@@ -1,0 +1,810 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Session 10: Sử Dụng Kafka Trong Microservice</title>
+  <style>
+    :root {
+      --bg-page: #f1f5f9;
+      --bg-slide: #ffffff;
+      --bg-subtle: #f8fafc;
+      --text-main: #0f172a;
+      --text-secondary: #475569;
+      --spring-green: #16a34a;
+      --spring-light: #dcfce7;
+      --blue: #0284c7;
+      --blue-light: #e0f2fe;
+      --amber: #d97706;
+      --amber-light: #fef3c7;
+      --rose: #e11d48;
+      --rose-light: #ffe4e6;
+      --purple: #7c3aed;
+      --purple-light: #f3e8ff;
+      --border: #e2e8f0;
+      --border-strong: #cbd5e1;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+      background-color: var(--bg-page);
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: flex-start;
+      padding: 16px 20px 24px;
+      overflow-x: hidden;
+    }
+    /* Khung Slide chuẩn 16:9 nhưng hỗ trợ co giãn tự nhiên, không bao giờ bị cắt chân */
+    .slide-frame {
+      width: 100%;
+      max-width: 1200px;
+      min-height: 640px;
+      background: var(--bg-slide);
+      border-radius: 16px;
+      box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.08), 0 8px 10px -6px rgba(15, 23, 42, 0.04);
+      border: 1px solid var(--border);
+      padding: 24px 32px 28px;
+      display: none;
+      flex-direction: column;
+      animation: fadeIn 0.18s ease-out;
+    }
+    .slide-frame.active {
+      display: flex;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(3px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .slide-header {
+      border-bottom: 2px solid var(--bg-page);
+      padding-bottom: 10px;
+      margin-bottom: 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-shrink: 0;
+    }
+    .badge-group {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .badge-level {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 999px;
+      font-size: 0.75rem;
+      font-weight: 800;
+      letter-spacing: 0.02em;
+    }
+    .badge-basic { background: #dbeafe; color: #1d4ed8; }
+    .badge-adv { background: #fae8ff; color: #86198f; }
+
+    .lesson-tag {
+      display: inline-block;
+      padding: 3px 12px;
+      border-radius: 999px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      background: var(--spring-light);
+      color: var(--spring-green);
+    }
+    .slide-title {
+      font-size: 1.45rem;
+      font-weight: 800;
+      color: var(--text-main);
+      margin-top: 4px;
+    }
+    .slide-body {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      justify-content: flex-start;
+    }
+    /* Grid 2 cột tự cân đối */
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 18px;
+      align-items: start;
+    }
+    .card {
+      background: var(--bg-subtle);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px 18px;
+      display: flex;
+      flex-direction: column;
+    }
+    .card-title {
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: var(--text-main);
+      margin-bottom: 10px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    /* Code block sáng sủa, không bao giờ cắt xén ngang */
+    pre {
+      background: #ffffff;
+      border: 1px solid var(--border-strong);
+      border-left: 4px solid var(--blue);
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-family: 'Cascadia Code', 'Fira Code', Consolas, monospace;
+      font-size: 0.81rem;
+      line-height: 1.45;
+      color: #1e293b;
+      overflow-x: auto;
+      white-space: pre-wrap;       /* Cho phép wrap dòng nếu code quá dài */
+      word-break: break-word;
+    }
+    code {
+      font-family: 'Cascadia Code', 'Fira Code', Consolas, monospace;
+      background: #e2e8f0;
+      color: #0f172a;
+      padding: 2px 5px;
+      border-radius: 4px;
+      font-size: 0.85em;
+    }
+    pre code {
+      background: none;
+      padding: 0;
+      font-size: inherit;
+    }
+    .kw { color: #0284c7; font-weight: 600; }
+    .an { color: #16a34a; font-weight: 600; }
+    .str { color: #b45309; }
+    .cmt { color: #64748b; font-style: italic; }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #ffffff;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    th, td {
+      padding: 9px 12px;
+      text-align: left;
+      border-bottom: 1px solid var(--border);
+      font-size: 0.86rem;
+      line-height: 1.35;
+    }
+    tr:last-child td { border-bottom: none; }
+    th {
+      background: var(--bg-subtle);
+      color: var(--text-main);
+      font-weight: 700;
+    }
+    .diagram-card {
+      background: #ffffff;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    svg {
+      width: 100%;
+      height: auto;
+      max-height: 165px;
+    }
+    .controls {
+      width: 100%;
+      max-width: 1200px;
+      margin-top: 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      color: var(--text-secondary);
+      font-size: 0.88rem;
+    }
+    .btn {
+      background: #ffffff;
+      color: var(--text-main);
+      border: 1px solid var(--border-strong);
+      padding: 6px 16px;
+      border-radius: 8px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .btn:hover {
+      border-color: var(--spring-green);
+      color: var(--spring-green);
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ================= SLIDE 1: GIỚI THIỆU KAFKA ================= -->
+  <section class="slide-frame active">
+    <div class="slide-header">
+      <div>
+        <div class="badge-group">
+          <span class="badge-level badge-basic">CƠ BẢN</span>
+          <span class="lesson-tag">Lesson 1 • Giới thiệu Kafka, topic, partition</span>
+        </div>
+        <div class="slide-title">1. Giới Thiệu Apache Kafka: Nền Tảng Lưu Trữ Nhật Ký (Log)</div>
+      </div>
+    </div>
+    <div class="slide-body">
+      <div class="diagram-card">
+        <svg viewBox="0 0 960 145" xmlns="http://www.w3.org/2000/svg">
+          <rect x="20" y="25" width="160" height="90" rx="10" fill="#e0f2fe" stroke="#0284c7" stroke-width="2"/>
+          <text x="100" y="65" text-anchor="middle" font-weight="bold" font-size="14" fill="#0369a1">Producers</text>
+          <text x="100" y="88" text-anchor="middle" font-size="11" fill="#0284c7">Gửi tin nhắn (Publish)</text>
+
+          <line x1="180" y1="70" x2="250" y2="70" stroke="#0284c7" stroke-width="2.5" marker-end="url(#ar1)"/>
+
+          <rect x="255" y="15" width="450" height="110" rx="12" fill="#f8fafc" stroke="#94a3b8" stroke-width="2"/>
+          <text x="480" y="40" text-anchor="middle" font-weight="bold" font-size="13" fill="#0f172a">Kafka Cluster (Brokers)</text>
+          <rect x="275" y="52" width="410" height="55" rx="6" fill="#ffffff" stroke="#cbd5e1"/>
+          <text x="360" y="83" font-weight="bold" font-size="12" fill="#334155">Topic "order-events"</text>
+          <rect x="470" y="62" width="65" height="34" rx="4" fill="#dcfce7" stroke="#16a34a"/><text x="502" y="83" text-anchor="middle" font-size="10" font-weight="bold">Part 0</text>
+          <rect x="545" y="62" width="65" height="34" rx="4" fill="#dcfce7" stroke="#16a34a"/><text x="577" y="83" text-anchor="middle" font-size="10" font-weight="bold">Part 1</text>
+          <rect x="620" y="62" width="65" height="34" rx="4" fill="#dcfce7" stroke="#16a34a"/><text x="652" y="83" text-anchor="middle" font-size="10" font-weight="bold">Part 2</text>
+
+          <line x1="705" y1="70" x2="775" y2="70" stroke="#16a34a" stroke-width="2.5" marker-end="url(#ar2)"/>
+
+          <rect x="780" y="25" width="160" height="90" rx="10" fill="#dcfce7" stroke="#16a34a" stroke-width="2"/>
+          <text x="860" y="65" text-anchor="middle" font-weight="bold" font-size="14" fill="#14532d">Consumers</text>
+          <text x="860" y="88" text-anchor="middle" font-size="11" fill="#16a34a">Đọc tin nhắn (Subscribe)</text>
+        </svg>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title">📌 Kafka Là Gì?</div>
+          <p style="font-size:0.88rem; line-height:1.5; color:#334155;">
+            Kafka không phải là hàng đợi xóa sau khi đọc (như RabbitMQ), mà là một <strong>Distributed Streaming Log</strong>. Dữ liệu được lưu trữ tuần tự trên đĩa cứng và được giữ lại trong thời gian dài (vd: 7 ngày), cho phép nhiều bên cùng đọc độc lập.
+          </p>
+        </div>
+        <div class="card">
+          <div class="card-title">🎯 Vì Sao Microservices Cần Kafka?</div>
+          <table>
+            <tr><td><strong>Thông Lượng Khủng</strong></td><td>Xử lý hàng triệu message/giây mà không bị sụt giảm tốc độ</td></tr>
+            <tr><td><strong>Tách Rời Dịch Vụ</strong></td><td>Order Service gửi xong là kết thúc, không cần chờ các service khác</td></tr>
+            <tr><td><strong>Khả Năng Đọc Lại</strong></td><td>Consumer mới khởi tạo có thể đọc lại dữ liệu lịch sử từ đầu</td></tr>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= SLIDE 2: TOPIC, PARTITION & OFFSET ================= -->
+  <section class="slide-frame">
+    <div class="slide-header">
+      <div>
+        <div class="badge-group">
+          <span class="badge-level badge-basic">CƠ BẢN</span>
+          <span class="lesson-tag">Lesson 1 • Giới thiệu Kafka, topic, partition</span>
+        </div>
+        <div class="slide-title">2. Topic, Partition & Cơ Chế Định Vị Offset</div>
+      </div>
+    </div>
+    <div class="slide-body">
+      <div class="diagram-card">
+        <svg viewBox="0 0 960 140" xmlns="http://www.w3.org/2000/svg">
+          <rect x="20" y="15" width="920" height="110" rx="10" fill="#f8fafc" stroke="#94a3b8" stroke-width="1.8"/>
+          <text x="40" y="38" font-weight="bold" font-size="12" fill="#0f172a">1 Partition = Hàng đợi chỉ ghi nối đuôi (Append-Only Log):</text>
+
+          <g transform="translate(40, 50)">
+            <rect x="0" y="0" width="75" height="55" rx="6" fill="#dcfce7" stroke="#16a34a"/><text x="37" y="28" text-anchor="middle" font-weight="bold" font-size="12">Msg</text><text x="37" y="45" text-anchor="middle" font-size="10" fill="#15803d">Offset 0</text>
+            <rect x="85" y="0" width="75" height="55" rx="6" fill="#dcfce7" stroke="#16a34a"/><text x="122" y="28" text-anchor="middle" font-weight="bold" font-size="12">Msg</text><text x="122" y="45" text-anchor="middle" font-size="10" fill="#15803d">Offset 1</text>
+            <rect x="170" y="0" width="75" height="55" rx="6" fill="#dcfce7" stroke="#16a34a"/><text x="207" y="28" text-anchor="middle" font-weight="bold" font-size="12">Msg</text><text x="207" y="45" text-anchor="middle" font-size="10" fill="#15803d">Offset 2</text>
+            <rect x="255" y="0" width="75" height="55" rx="6" fill="#fef3c7" stroke="#d97706"/><text x="292" y="28" text-anchor="middle" font-weight="bold" font-size="12">Msg</text><text x="292" y="45" text-anchor="middle" font-size="10" fill="#b45309">Offset 3</text>
+            <rect x="340" y="0" width="75" height="55" rx="6" fill="#e0f2fe" stroke="#0284c7"/><text x="377" y="28" text-anchor="middle" font-weight="bold" font-size="12">Msg</text><text x="377" y="45" text-anchor="middle" font-size="10" fill="#0284c7">Offset 4</text>
+            <rect x="425" y="0" width="75" height="55" rx="6" fill="#ffffff" stroke="#cbd5e1" stroke-dasharray="4"/><text x="462" y="32" text-anchor="middle" font-size="16" fill="#94a3b8">+</text>
+          </g>
+
+          <rect x="570" y="48" width="350" height="60" rx="8" fill="#ffffff" stroke="#cbd5e1"/>
+          <text x="590" y="72" font-size="12" font-weight="bold" fill="#15803d">🟢 Offset: Số định danh tăng dần</text>
+          <text x="590" y="94" font-size="11" fill="#475569">Mỗi message có 1 Offset duy nhất trong Partition</text>
+        </svg>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title">1. Khái Niệm Cơ Bản</div>
+          <table>
+            <tr><td><strong>Topic</strong></td><td>Kênh chia sẻ chung (vd: <code>order-events</code>)</td></tr>
+            <tr><td><strong>Partition</strong></td><td>Từng phân vùng nhỏ để tăng tốc độ ghi/đọc song song</td></tr>
+            <tr><td><strong>Thứ Tự</strong></td><td><strong>Chỉ đảm bảo thứ tự trong cùng 1 Partition!</strong></td></tr>
+          </table>
+        </div>
+        <div class="card">
+          <div class="card-title">2. Phân Phối Partition Theo Record Key</div>
+          <table>
+            <tr><td><strong>Có Record Key</strong></td><td><code>hash(key) % partitionCount</code> ➔ Cùng 1 ID (vd: <code>orderId</code>) luôn vào chung 1 Partition ➔ Giữ đúng thứ tự</td></tr>
+            <tr><td><strong>Không Có Key</strong></td><td>Dàn đều luân phiên (Round-robin) vào mọi Partition</td></tr>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= SLIDE 3: PRODUCER CƠ BẢN ================= -->
+  <section class="slide-frame">
+    <div class="slide-header">
+      <div>
+        <div class="badge-group">
+          <span class="badge-level badge-basic">CƠ BẢN</span>
+          <span class="lesson-tag">Lesson 2 • Producer – gửi sự kiện</span>
+        </div>
+        <div class="slide-title">3. Producer Cơ Bản: Cấu Hình & Gửi Sự Kiện</div>
+      </div>
+    </div>
+    <div class="slide-body">
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title">1. Cấu Hình <code>application.yml</code></div>
+          <pre><code><span class="kw">spring:</span>
+  <span class="kw">kafka:</span>
+    <span class="kw">bootstrap-servers:</span> localhost:9092
+    <span class="kw">producer:</span>
+      <span class="kw">key-serializer:</span> org.apache.kafka.common.serialization.StringSerializer
+      <span class="kw">value-serializer:</span> org.springframework.kafka.support.serializer.JsonSerializer</code></pre>
+          <p style="font-size:0.82rem; color:var(--text-secondary); margin-top:8px;">
+            <code>JsonSerializer</code> tự động chuyển Object Java (Event) thành chuỗi JSON mảng byte để gửi lên Broker.
+          </p>
+        </div>
+        <div class="card">
+          <div class="card-title">2. Gửi Message Bằng <code>KafkaTemplate</code></div>
+          <pre><code><span class="an">@Service</span>
+<span class="kw">public class</span> OrderProducer {
+
+    <span class="an">@Autowired</span>
+    <span class="kw">private</span> KafkaTemplate&lt;String, OrderEvent&gt; kafkaTemplate;
+
+    <span class="kw">public void</span> sendOrderCreated(OrderEvent event) {
+        <span class="cmt">// send(topic, key, value)</span>
+        kafkaTemplate.send(<span class="str">"order-events"</span>, event.getOrderId(), event);
+        System.out.println(<span class="str">"Đã gửi event: "</span> + event.getOrderId());
+    }
+}</code></pre>
+          <p style="font-size:0.82rem; color:var(--spring-green); font-weight:600; margin-top:8px;">
+            ✅ Dễ triển khai: Gọi <code>send()</code> là xong, không làm nghẽn tiến trình API chính.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= SLIDE 4: PRODUCER NÂNG CAO ================= -->
+  <section class="slide-frame">
+    <div class="slide-header">
+      <div>
+        <div class="badge-group">
+          <span class="badge-level badge-adv">NÂNG CAO</span>
+          <span class="lesson-tag">Lesson 2 • Producer – gửi sự kiện</span>
+        </div>
+        <div class="slide-title">4. Producer Nâng Cao: Xác Nhận Async, Acks & Idempotence</div>
+      </div>
+    </div>
+    <div class="slide-body">
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title">1. Bắt Kết Quả Asynchronous (CompletableFuture)</div>
+          <pre><code><span class="kw">public void</span> sendWithCallback(OrderEvent event) {
+    kafkaTemplate.send(<span class="str">"order-events"</span>, event.getOrderId(), event)
+        .whenComplete((result, ex) -&gt; {
+            <span class="kw">if</span> (ex == <span class="kw">null</span>) {
+                RecordMetadata rm = result.getRecordMetadata();
+                System.out.println(<span class="str">"Ghi thành công P: "</span> 
+                    + rm.partition() + <span class="str">" | Offset: "</span> + rm.offset());
+            } <span class="kw">else</span> {
+                System.err.println(<span class="str">"Gửi lỗi: "</span> + ex.getMessage());
+            }
+        });
+}</code></pre>
+        </div>
+        <div class="card">
+          <div class="card-title">2. Cấu Hình An Toàn Dữ Liệu (Zero Data-Loss)</div>
+          <pre><code><span class="kw">spring.kafka.producer:</span>
+  <span class="kw">acks:</span> all                <span class="cmt"># Chờ mọi replica ghi nhận</span>
+  <span class="kw">retries:</span> 3              <span class="cmt"># Tự động thử lại khi lỗi mạng</span>
+  <span class="kw">properties:</span>
+    <span class="kw">enable.idempotence:</span> true <span class="cmt"># Chống ghi trùng</span></code></pre>
+          <table>
+            <tr><td><code>acks=all</code></td><td>Bảo đảm dữ liệu nằm ở cả Leader và Replicas</td></tr>
+            <tr><td><code>idempotence=true</code></td><td>Bảo đảm không sinh ra 2 bản ghi trùng khi gửi lại</td></tr>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= SLIDE 5: CONSUMER CƠ BẢN ================= -->
+  <section class="slide-frame">
+    <div class="slide-header">
+      <div>
+        <div class="badge-group">
+          <span class="badge-level badge-basic">CƠ BẢN</span>
+          <span class="lesson-tag">Lesson 3 • Consumer – nhận sự kiện</span>
+        </div>
+        <div class="slide-title">5. Consumer Cơ Bản: Lắng Nghe Sự Kiện (@KafkaListener)</div>
+      </div>
+    </div>
+    <div class="slide-body">
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title">1. Cấu Hình Consumer Trong <code>application.yml</code></div>
+          <pre><code><span class="kw">spring:</span>
+  <span class="kw">kafka:</span>
+    <span class="kw">consumer:</span>
+      <span class="kw">bootstrap-servers:</span> localhost:9092
+      <span class="kw">group-id:</span> payment-group
+      <span class="kw">auto-offset-reset:</span> earliest
+      <span class="kw">key-deserializer:</span> org.apache.kafka.common.serialization.StringDeserializer
+      <span class="kw">value-deserializer:</span> org.springframework.kafka.support.serializer.JsonDeserializer
+      <span class="kw">properties:</span>
+        <span class="kw">spring.json.trusted.packages:</span> <span class="str">"com.example.*"</span></code></pre>
+        </div>
+        <div class="card">
+          <div class="card-title">2. Class Lắng Nghe <code>@KafkaListener</code></div>
+          <pre><code><span class="an">@Component</span>
+<span class="kw">public class</span> PaymentConsumer {
+
+    <span class="an">@KafkaListener</span>(
+        topics = <span class="str">"order-events"</span>, 
+        groupId = <span class="str">"payment-group"</span>
+    )
+    <span class="kw">public void</span> onOrderCreated(OrderEvent event) {
+        System.out.println(<span class="str">"Nhận đơn: "</span> + event.getOrderId() 
+            + <span class="str">" | Tiền: "</span> + event.getTotalAmount());
+        <span class="cmt">// Gọi nghiệp vụ trừ tiền</span>
+    }
+}</code></pre>
+          <p style="font-size:0.82rem; color:var(--text-secondary); margin-top:8px;">
+            <code>@KafkaListener</code> tự động khởi tạo background thread lắng nghe topic liên tục.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= SLIDE 6: CONSUMER NÂNG CAO ================= -->
+  <section class="slide-frame">
+    <div class="slide-header">
+      <div>
+        <div class="badge-group">
+          <span class="badge-level badge-adv">NÂNG CAO</span>
+          <span class="lesson-tag">Lesson 3 • Consumer – nhận sự kiện</span>
+        </div>
+        <div class="slide-title">6. Consumer Nâng Cao: Consumer Group, Metadata & Manual Ack</div>
+      </div>
+    </div>
+    <div class="slide-body">
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title">1. Lấy Metadata (Partition, Offset) & Manual Commit</div>
+          <pre><code><span class="an">@KafkaListener</span>(topics = <span class="str">"order-events"</span>, groupId = <span class="str">"payment-group"</span>)
+<span class="kw">public void</span> onMessage(
+    <span class="an">@Payload</span> OrderEvent event,
+    <span class="an">@Header</span>(KafkaHeaders.RECEIVED_PARTITION) <span class="kw">int</span> part,
+    <span class="an">@Header</span>(KafkaHeaders.OFFSET) <span class="kw">long</span> offset,
+    Acknowledgment ack <span class="cmt">// Dùng khi Manual Ack</span>
+) {
+    System.out.println(<span class="str">"P: "</span> + part + <span class="str">" | Offset: "</span> + offset);
+    
+    <span class="cmt">// Xử lý DB thành công mới lưu Offset</span>
+    orderService.process(event);
+    ack.acknowledge(); 
+}</code></pre>
+        </div>
+        <div class="card">
+          <div class="card-title">2. Quy Tắc Consumer Group & Rebalance</div>
+          <table>
+            <tr><td><strong>1 Partition</strong></td><td>Chỉ gán cho duy nhất 1 Consumer trong 1 Group</td></tr>
+            <tr><td><strong>Consumer &gt; Partition</strong></td><td>Consumer dư thừa sẽ ngồi chờ (Idle), không tăng tải</td></tr>
+            <tr><td><strong>Đa Nhóm (Pub/Sub)</strong></td><td>Payment Group và Shipping Group cùng đọc 1 event độc lập</td></tr>
+            <tr><td><strong>Rebalance</strong></td><td>Tự động chia lại partition khi 1 instance consumer gặp sự cố</td></tr>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= SLIDE 7: EVENT-DRIVEN CƠ BẢN ================= -->
+  <section class="slide-frame">
+    <div class="slide-header">
+      <div>
+        <div class="badge-group">
+          <span class="badge-level badge-basic">CƠ BẢN</span>
+          <span class="lesson-tag">Lesson 4 • Triển khai event-driven communication</span>
+        </div>
+        <div class="slide-title">7. Kiến Trúc Hướng Sự Kiện (Event-Driven) Là Gì?</div>
+      </div>
+    </div>
+    <div class="slide-body">
+      <div class="diagram-card">
+        <svg viewBox="0 0 960 140" xmlns="http://www.w3.org/2000/svg">
+          <!-- REST -->
+          <rect x="20" y="15" width="440" height="110" rx="8" fill="#fff1f2" stroke="#fda4af" stroke-width="1.8"/>
+          <text x="35" y="36" fill="#e11d48" font-weight="bold" font-size="12">❌ REST Đồng Bộ: Phải chờ từng service phản hồi</text>
+          <rect x="35" y="48" width="90" height="65" rx="6" fill="#ffffff" stroke="#cbd5e1"/><text x="80" y="85" text-anchor="middle" font-weight="bold" font-size="12">Order</text>
+          <line x1="125" y1="70" x2="190" y2="70" stroke="#e11d48" stroke-width="2"/>
+          <rect x="190" y="52" width="100" height="28" rx="4" fill="#ffffff" stroke="#cbd5e1"/><text x="240" y="70" text-anchor="middle" font-size="10">Payment OK</text>
+          <line x1="125" y1="95" x2="190" y2="95" stroke="#e11d48" stroke-width="2"/>
+          <rect x="190" y="82" width="100" height="28" rx="4" fill="#fee2e2" stroke="#dc2626"/><text x="240" y="100" text-anchor="middle" font-size="10" fill="#991b1b">Email Lỗi ➔ Dừng</text>
+
+          <!-- Kafka -->
+          <rect x="490" y="15" width="450" height="110" rx="8" fill="#f0fdf4" stroke="#86efac" stroke-width="1.8"/>
+          <text x="505" y="36" fill="#15803d" font-weight="bold" font-size="12">✅ Event-Driven: Bắn sự kiện lên Kafka và xong</text>
+          <rect x="505" y="55" width="90" height="55" rx="6" fill="#dcfce7" stroke="#16a34a"/><text x="550" y="87" text-anchor="middle" font-weight="bold" font-size="12">Order</text>
+          <line x1="595" y1="82" x2="650" y2="82" stroke="#16a34a" stroke-width="2"/>
+          <rect x="650" y="48" width="100" height="68" rx="6" fill="#ffffff" stroke="#0284c7"/><text x="700" y="86" text-anchor="middle" font-weight="bold" font-size="11" fill="#0284c7">Kafka Topic</text>
+          <line x1="750" y1="65" x2="800" y2="60" stroke="#16a34a" stroke-width="2"/><rect x="800" y="48" width="125" height="24" rx="4" fill="#ffffff" stroke="#16a34a"/><text x="862" y="64" text-anchor="middle" font-size="10">Payment Service</text>
+          <line x1="750" y1="95" x2="800" y2="100" stroke="#16a34a" stroke-width="2"/><rect x="800" y="88" width="125" height="24" rx="4" fill="#ffffff" stroke="#16a34a"/><text x="862" y="104" text-anchor="middle" font-size="10">Email Service</text>
+        </svg>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title">Bản Chất Của Event-Driven</div>
+          <p style="font-size:0.86rem; line-height:1.45; color:#334155;">
+            Một dịch vụ không gọi trực tiếp dịch vụ khác mà chỉ <strong>phát ra một thông báo khi có sự kiện nghiệp vụ xảy ra</strong> (vd: <code>OrderCreated</code>). Bất kỳ ai quan tâm thì tự đăng ký nhận, bên phát không cần quan tâm có bao nhiêu người nhận.
+          </p>
+        </div>
+        <div class="card">
+          <div class="card-title">Lợi Ích So Với REST API</div>
+          <table>
+            <tr><td><strong>Thời Gian Đáp Ứng</strong></td><td>Người dùng nhận kết quả "Đặt hàng thành công" ngay tức thì</td></tr>
+            <tr><td><strong>Chịu Lỗi Cực Tốt</strong></td><td>Dịch vụ gửi Email có chết thì tin nhắn vẫn nằm trên Kafka, bật lại gửi tiếp</td></tr>
+            <tr><td><strong>Mở Rộng Không Cần Sửa Code</strong></td><td>Thêm dịch vụ Tích Điểm chỉ cần subscribe topic, không sửa code Order</td></tr>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= SLIDE 8: EVENT-DRIVEN NÂNG CAO ================= -->
+  <section class="slide-frame">
+    <div class="slide-header">
+      <div>
+        <div class="badge-group">
+          <span class="badge-level badge-adv">NÂNG CAO</span>
+          <span class="lesson-tag">Lesson 4 • Triển khai event-driven communication</span>
+        </div>
+        <div class="slide-title">8. Xử Lý Thách Thức: Idempotency & Dead Letter Queue (DLQ)</div>
+      </div>
+    </div>
+    <div class="slide-body">
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title">1. Idempotent Consumer (Chống Trừ Tiền Trùng)</div>
+          <p style="font-size:0.82rem; color:#475569; margin-bottom:6px;">
+            Kafka đảm bảo giao ít nhất 1 lần (At-least-once), có thể gửi lại message nếu bị mất kết nối mạng. Consumer phải tự kiểm tra chống trùng:
+          </p>
+          <pre><code><span class="kw">public void</span> onMessage(OrderEvent event) {
+    <span class="cmt">// 1. Kiểm tra mã đơn đã xử lý chưa</span>
+    <span class="kw">if</span> (paymentRepo.existsByOrderId(event.getOrderId())) {
+        <span class="kw">return</span>; <span class="cmt">// Bỏ qua, không trừ tiền lần 2</span>
+    }
+    <span class="cmt">// 2. Thực hiện trừ tiền & lưu DB</span>
+    paymentRepo.save(<span class="kw">new</span> Payment(event.getOrderId()));
+}</code></pre>
+        </div>
+        <div class="card">
+          <div class="card-title">2. Dead Letter Queue Với <code>@RetryableTopic</code></div>
+          <p style="font-size:0.82rem; color:#475569; margin-bottom:6px;">
+            Khi message bị lỗi cú pháp hoặc crash liên tục, tự động đẩy sang Topic lỗi (DLT) để không làm nghẽn cả hệ thống:
+          </p>
+          <pre><code><span class="an">@RetryableTopic</span>(
+    attempts = <span class="str">"3"</span>,
+    backoff = <span class="an">@BackOff</span>(delay = 1000, multiplier = 2.0),
+    dltTopicSuffix = <span class="str">"-dlt"</span>
+)
+<span class="an">@KafkaListener</span>(topics = <span class="str">"order-events"</span>)
+<span class="kw">public void</span> process(OrderEvent event) {
+    <span class="cmt">// Thử 3 lần không được ➔ Chuyển "order-events-dlt"</span>
+}</code></pre>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= SLIDE 9: DOCKER TRIỂN KHAI KAFKA ================= -->
+  <section class="slide-frame">
+    <div class="slide-header">
+      <div>
+        <div class="badge-group">
+          <span class="badge-level badge-basic">CƠ BẢN</span>
+          <span class="lesson-tag">Lesson 5 • Triển khai Kafka broker trên Docker</span>
+        </div>
+        <div class="slide-title">9. Triển Khai Kafka Broker Bằng Docker Compose (KRaft)</div>
+      </div>
+    </div>
+    <div class="slide-body">
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title">File <code>docker-compose.yml</code> (Chuẩn KRaft Không Cần ZooKeeper)</div>
+          <pre><code><span class="kw">version:</span> <span class="str">'3.8'</span>
+<span class="kw">services:</span>
+  <span class="kw">kafka:</span>
+    <span class="kw">image:</span> apache/kafka:latest
+    <span class="kw">container_name:</span> kafka-broker
+    <span class="kw">ports:</span>
+      - <span class="str">"9092:9092"</span>
+    <span class="kw">environment:</span>
+      <span class="kw">KAFKA_NODE_ID:</span> 1
+      <span class="kw">KAFKA_PROCESS_ROLES:</span> broker,controller
+      <span class="kw">KAFKA_LISTENERS:</span> PLAINTEXT://:9092,CONTROLLER://:9093
+      <span class="kw">KAFKA_ADVERTISED_LISTENERS:</span> PLAINTEXT://localhost:9092
+      <span class="kw">KAFKA_CONTROLLER_QUORUM_VOTERS:</span> 1@localhost:9093
+      <span class="kw">KAFKA_CONTROLLER_LISTENER_NAMES:</span> CONTROLLER</code></pre>
+        </div>
+        <div class="card">
+          <div class="card-title">Lệnh Khởi Động & Kiểm Tra</div>
+          <pre><code><span class="cmt"># 1. Chạy ngầm Kafka Broker</span>
+docker compose up -d
+
+<span class="cmt"># 2. Kiểm tra container đang chạy</span>
+docker ps
+
+<span class="cmt"># 3. Xem log hoạt động</span>
+docker logs -f kafka-broker</code></pre>
+          <p style="font-size:0.84rem; color:var(--spring-green); font-weight:600; margin-top:8px;">
+            ✅ Nhẹ & Nhanh: Kafka phiên bản mới (KRaft) không cần ZooKeeper, khởi động trong 2 giây.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= SLIDE 10: QUẢN TRỊ DOCKER & KAFKA-UI ================= -->
+  <section class="slide-frame">
+    <div class="slide-header">
+      <div>
+        <div class="badge-group">
+          <span class="badge-level badge-adv">NÂNG CAO</span>
+          <span class="lesson-tag">Lesson 5 • Triển khai Kafka broker trên Docker</span>
+        </div>
+        <div class="slide-title">10. Quản Trị Trực Quan Qua Kafka-UI & Các Lệnh CLI Tiện Ích</div>
+      </div>
+    </div>
+    <div class="slide-body">
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title">1. Giao Diện Trực Quan Web (Kafka-UI)</div>
+          <pre><code>  <span class="kw">kafka-ui:</span>
+    <span class="kw">image:</span> provectuslabs/kafka-ui:latest
+    <span class="kw">container_name:</span> kafka-ui
+    <span class="kw">ports:</span>
+      - <span class="str">"8080:8080"</span>
+    <span class="kw">environment:</span>
+      <span class="kw">KAFKA_CLUSTERS_0_NAME:</span> local
+      <span class="kw">KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS:</span> kafka:9092</code></pre>
+          <p style="font-size:0.84rem; color:var(--blue); font-weight:bold; margin-top:8px;">
+            🌐 Truy cập: <code>http://localhost:8080</code> để xem chi tiết Topics, Messages và Consumer Lag.
+          </p>
+        </div>
+        <div class="card">
+          <div class="card-title">2. Lệnh CLI Quản Lý Topic Trong Container</div>
+          <pre><code><span class="cmt"># Tạo topic "order-events" có 3 Partitions</span>
+docker exec -it kafka-broker /opt/kafka/bin/kafka-topics.sh \
+  --create --topic order-events --partitions 3 \
+  --bootstrap-server localhost:9092
+
+<span class="cmt"># Xem danh sách Topic</span>
+docker exec -it kafka-broker /opt/kafka/bin/kafka-topics.sh \
+  --list --bootstrap-server localhost:9092
+
+<span class="cmt"># Xem nội dung tin nhắn từ đầu</span>
+docker exec -it kafka-broker /opt/kafka/bin/kafka-console-consumer.sh \
+  --topic order-events --from-beginning \
+  --bootstrap-server localhost:9092</code></pre>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= SLIDE 11: TỔNG KẾT LUỒNG DEMO ================= -->
+  <section class="slide-frame">
+    <div class="slide-header">
+      <div>
+        <span class="lesson-tag">Tổng kết thực hành • Buổi 10</span>
+        <div class="slide-title">11. Kịch Bản Demo Hoàn Chỉnh Giữa Hai Microservices</div>
+      </div>
+    </div>
+    <div class="slide-body">
+      <div class="card">
+        <div class="card-title">Quy Trình 4 Bước Trình Diễn Trên Lớp</div>
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 70px;">Bước</th>
+              <th>Thao Tác Của Giảng Viên</th>
+              <th>Cơ Chế Phía Sau Của Kafka</th>
+              <th>Kết Quả Quan Sát</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>B1</strong></td>
+              <td>Chạy <code>docker compose up -d</code></td>
+              <td>Bật Kafka Broker (port 9092) và giao diện Web Kafka-UI (port 8080)</td>
+              <td>Mở <code>localhost:8080</code> thấy broker trạng thái Online</td>
+            </tr>
+            <tr>
+              <td><strong>B2</strong></td>
+              <td>Chạy <code>OrderService (:8081)</code> & gửi API tạo đơn</td>
+              <td><code>KafkaTemplate</code> gửi sự kiện <code>OrderCreated</code> lên topic <code>order-events</code></td>
+              <td>Thấy message xuất hiện trên giao diện Kafka-UI</td>
+            </tr>
+            <tr>
+              <td><strong>B3</strong></td>
+              <td>Chạy <code>PaymentService (:8082)</code></td>
+              <td><code>@KafkaListener</code> nhận event và bóc tách dữ liệu</td>
+              <td>Console hiển thị: "Nhận đơn hàng & thanh toán thành công"</td>
+            </tr>
+            <tr>
+              <td><strong>B4</strong></td>
+              <td>Tắt <code>PaymentService</code> ➔ Gửi 2 đơn hàng mới ➔ Bật lại <code>PaymentService</code></td>
+              <td>Message được lưu an toàn trong Append-Only Log khi consumer offline</td>
+              <td><strong>Ngay khi bật lại, PaymentService tự động đọc bù đủ 2 đơn tồn!</strong></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title">Kiến Thức Cốt Lõi Cần Nhớ</div>
+          <p style="font-size:0.84rem; line-height:1.45; color:#334155;">
+            • <strong>Partition & Key:</strong> Thứ tự được đảm bảo khi các event cùng Key rơi vào 1 Partition.<br/>
+            • <strong>Consumer Group:</strong> Tự động phân bổ tải đọc tin nhắn, mở rộng linh hoạt theo số Partition.<br/>
+            • <strong>Decoupling:</strong> Producer và Consumer không phụ thuộc vào tình trạng sống/chết của nhau.
+          </p>
+        </div>
+        <div class="card">
+          <div class="card-title">Ứng Dụng Thực Tế</div>
+          <p style="font-size:0.84rem; line-height:1.45; color:#334155;">
+            Hệ thống Thương mại điện tử (E-commerce), ngân hàng, đặt xe sử dụng Kafka để xử lý hàng triệu giao dịch, thanh toán bất đồng bộ, gửi email thông báo và tổng hợp dữ liệu phân tích theo thời gian thực.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Controls -->
+  <div class="controls">
+    <div>
+      <button class="btn" onclick="prev()">◀ Slide trước (←)</button>
+      <button class="btn" onclick="next()" style="margin-left: 8px;">Slide tiếp (→) ▶</button>
+    </div>
+    <div id="page-indicator" style="font-weight: 700;">Slide 1 / 11</div>
+  </div>
+
+  <script>
+    const slides = document.querySelectorAll('.slide-frame');
+    const indicator = document.getElementById('page-indicator');
+    let current = 0;
+
+    function showSlide(index) {
+      slides.forEach((s, i) => s.classList.toggle('active', i === index));
+      indicator.textContent = `Slide ${index + 1} / ${slides.length}`;
+      window.scrollTo(0, 0);
+    }
+    function next() {
+      if (current < slides.length - 1) { current++; showSlide(current); }
+    }
+    function prev() {
+      if (current > 0) { current--; showSlide(current); }
+    }
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowRight' || e.key === ' ') { e.preventDefault(); next(); }
+      if (e.key === 'ArrowLeft') { e.preventDefault(); prev(); }
+    });
+  </script>
+</body>
+</html>
